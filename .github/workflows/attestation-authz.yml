@@ -1,0 +1,52 @@
+name: attestation-repository-authz-probe
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+  attestations: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Confirm target-context override reaches the action process
+        env:
+          GITHUB_REPOSITORY: mickeyjoes-h1/h1-attest-boundary-b-20260723
+        shell: bash
+        run: |
+          test "$GITHUB_REPOSITORY" = "mickeyjoes-h1/h1-attest-boundary-b-20260723"
+          echo "foreign_context_override=active"
+
+      - name: Positive control in token repository
+        id: positive
+        uses: actions/attest@v4
+        with:
+          subject-name: h1-attestation-positive-control
+          subject-digest: sha256:1111111111111111111111111111111111111111111111111111111111111111
+
+      - name: Attempt attestation write to foreign repository context
+        id: foreign
+        continue-on-error: true
+        uses: actions/attest@v4
+        env:
+          GITHUB_REPOSITORY: mickeyjoes-h1/h1-attest-boundary-b-20260723
+        with:
+          subject-name: h1-attestation-foreign-control
+          subject-digest: sha256:2222222222222222222222222222222222222222222222222222222222222222
+
+      - name: Assert repository authorization
+        env:
+          POSITIVE_OUTCOME: ${{ steps.positive.outcome }}
+          FOREIGN_OUTCOME: ${{ steps.foreign.outcome }}
+        shell: bash
+        run: |
+          echo "positive_outcome=$POSITIVE_OUTCOME"
+          echo "foreign_outcome=$FOREIGN_OUTCOME"
+          test "$POSITIVE_OUTCOME" = "success"
+          test "$FOREIGN_OUTCOME" = "failure"
+          echo "attestation_repository_scope=pass"
